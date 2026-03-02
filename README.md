@@ -113,45 +113,31 @@ The paper abstracts get embedded and indexed in Qdrant with OpenAI's `text-embed
 make create-qdrant-collection
 ```
 
-This creates a configured collection (its name we provided in .env) with three [named vectors](https://qdrant.tech/documentation/concepts/vectors/#named-vectors) — `Dense`, `Reranker`, and `Lexical`:
+This creates a configured **empty** collection (its name we provided in .env) with three [named vectors](https://qdrant.tech/documentation/concepts/vectors/#named-vectors) — `Dense`, `Reranker`, and `Lexical`:
 
 | Vector | Type | Dimensions | Role |
 |--------|------|-----------|------|
-| **Dense** | [dense](https://qdrant.tech/documentation/concepts/vectors/#dense-vectors), `text-embedding-3-small` | 1024 | Semantic retrieval, [scalar quantization](https://qdrant.tech/documentation/guides/quantization/#setting-up-scalar-quantization). Quantized vectors are used for retrieval and stored in RAM, originals on disk. |
-| **Reranker** | [dense](https://qdrant.tech/documentation/concepts/vectors/#dense-vectors), `text-embedding-3-small` | 1536 | Reranking only. Stored on disk, no [vector index](https://qdrant.tech/documentation/concepts/indexing/#vector-index) built for it. |
+| **Dense** | [dense](https://qdrant.tech/documentation/concepts/vectors/#dense-vectors), `text-embedding-3-small` | 1024 | Semantic retrieval, [scalar quantization](https://qdrant.tech/documentation/guides/quantization/#setting-up-scalar-quantization). Quantized vectors will be used for retrieval. Stored in RAM, originals on disk. |
+| **Reranker** | [dense](https://qdrant.tech/documentation/concepts/vectors/#dense-vectors), `text-embedding-3-small` | 1536 | Reranking only. Stored on disk and no [vector index](https://qdrant.tech/documentation/concepts/indexing/#vector-index) built for it. |
 | **Lexical** | [sparse](https://qdrant.tech/documentation/concepts/vectors/#sparse-vectors) | varies | [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) keyword matching. |
 
 All collection configuration lives in `search_engine.py`.
 
-#### Cloud Inference + Matryoshka Representation Learning
-
-Both dense vectors come from `text-embedding-3-small`, which supports [MRL](https://huggingface.co/blog/matryoshka) ([OpenAI implementation](https://openai.com/index/new-embedding-models-and-api-updates/)), a training approach that front-loads all important information into the earliest dimensions of an embedding. Due to that, a single embedding can be truncated to any shorter prefix and still be used meaningfully.
-
-We use two truncation levels from one model:
-- **1024 dims → Dense**, fast retrieval with lower memory footprint.
-- **1536 dims → Reranker**, higher precision for rescoring retrieved candidates.
-
-> **Experiment:** You can change `OPENAI_RETRIEVER_EMBEDDING_DIMENSION` and `OPENAI_RERANKER_EMBEDDING_DIMENSION` in `search_engine.py` to see how dimensionality affects resource usage and retrieval quality. 1536 is the maximum for `text-embedding-3-small`. You can also switch `OPENAI_EMBEDDING_MODEL` to `text-embedding-3-large` for higher dimensions, but it is significantly more expensive.
-
-With [Cloud Inference](https://qdrant.tech/documentation/cloud/inference/#use-external-models) (`CLOUD_INFERENCE = True` in `search_engine.py`), embedding happens server-side: the client sends raw text, Qdrant calls OpenAI. MRL truncation requests for the same text [are deduplicated into one API call](https://qdrant.tech/documentation/concepts/inference/#reduce-vector-dimensionality-with-matryoshka-models), to save costs and latency.
-
 #### Scalar quantization
 
-The `Dense` vector is quantized using [scalar quantization](https://qdrant.tech/course/essentials/day-4/what-is-quantization/#scalar-quantization) and only quantized lighter vectors are kept in RAM (`always_ram=True`). Each float32 in original vector is compressed to 8 bits, reducing memory ~4x. Original vectors stay on disk for rescoring (`rescore=True` at query time), so accuracy is preserved despite compression.
+The `Dense` vectors are configured to be quantized using [scalar quantization](https://qdrant.tech/course/essentials/day-4/what-is-quantization/#scalar-quantization). Only quantized lighter vectors will be kept in RAM (`always_ram=True`). Each float32 in original vector will be compressed to 8 bits, reducing memory ~4x. Original vectors will stay on disk for rescoring at query time, so accuracy of search will be preserved despite compression.
 
-Scalar quantization is a safe default choice. Other quantization methods are also available, see [our documentation on quantization in Qdrant](https://qdrant.tech/documentation/guides/quantization). It's important to keep quantization in mind early: at scale (much more than 30k papers), it saves significantly on latency and RAM costs.
+Scalar quantization is a safe default choice. Other quantization methods are also available, see [our documentation on quantization in Qdrant](https://qdrant.tech/documentation/guides/quantization). It's important to keep quantization in mind early, at configuration time: at scale (much more than 30k papers), it saves significantly on latency and RAM costs.
 
 > **Experiment:** The `quantile` parameter (default: `0.99`) in `search_engine.py` → `create_collection()` controls how aggressively outlier values are clipped during quantization.
 
 #### BM25 sparse vectors
 
-Qdrant supports [sparse vectors](https://qdrant.tech/documentation/concepts/vectors/#sparse-vectors) alongside dense vectors. This lets us use the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) formula, well-known in information retrieval, through [BM25-based sparse vector inference](https://qdrant.tech/documentation/guides/text-search/#bm25).
+Qdrant supports [sparse vectors](https://qdrant.tech/documentation/concepts/vectors/#sparse-vectors) alongside dense vectors. This lets us adding to the search pipeline the [BM25](https://en.wikipedia.org/wiki/Okapi_BM25)-based retrieval, well-known in IR.
 
-In biomedical text, this matters: specific terms like gene names ("TP53") or drug names ("metformin") carry precise meaning that dense embeddings sometimes dilute.
+In biomedical domain keywords-based matching matters: specific terms like gene names ("TP53") or drug names ("metformin") carry precise meaning that dense embeddings sometimes dilute.
 
-> BM25 usage in Qdrant requires an `avg_len` parameter, the average document length used in the formula. We estimate this by sampling the first 300 abstracts (see `_estimate_avg_abstract_len()` in `search_engine.py`). You can adjust `ESTIMATE_BM25_AVG_LEN_ON_X_DOCS` if needed.
-
-> The `Lexical` vector is configured with `modifier=IDF`, which enables [inverse document frequency](https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Inverse_document_frequency) weighting from BM25 formula. This is set in `search_engine.py` → `create_collection()` via `SparseVectorParams`.
+> The `Lexical` vector is configured with `modifier=IDF`, which enables server-side [inverse document frequency](https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Inverse_document_frequency) weighting from BM25 formula. This is set in `search_engine.py` → `create_collection()` via `SparseVectorParams`.
 
 ### Step 2 — Ingest the data
 
@@ -159,14 +145,23 @@ In biomedical text, this matters: specific terms like gene names ("TP53") or dru
 make ingest-data-to-qdrant
 ```
 
-With Cloud Inference enabled (`CLOUD_INFERENCE = True` in `search_engine.py`), ingestion should take around 5 minutes. You can speed it up by playing with the parameters of `upload_points` in `search_engine.py`.
+#### Cloud Inference + Matryoshka Representation Learning
+
+With [Cloud Inference](https://qdrant.tech/documentation/cloud/inference/#use-external-models) (`CLOUD_INFERENCE = True` in `search_engine.py`), embedding happens server-side: the client sends raw text, Qdrant calls OpenAI.  
+With it enabled, ingestion should take around 5 minutes. You can speed it further up by playing with the parameters of `upload_points` in `search_engine.py`.
 Without Cloud Inference ingestion will take longer.
 
-**Efficient batch upload.** Papers are streamed via a generator into `upload_points` in batches (default: 32). Lazy batching, auto retries, parallelism, see `batch_size`, `parallel`, and `max_retries` parameters in `search_engine.py` → `upsert_points()`.
+Both dense vectors (`Dense` and `Reranker`) are derived from `text-embedding-3-small` embeddings, which supports [Matryoshka Representation Learning (MRL)](https://huggingface.co/blog/matryoshka) ([OpenAI MRL](https://openai.com/index/new-embedding-models-and-api-updates/)), a training approach that front-loads all important information into the earliest dimensions of an embedding. Due to that, a single embedding can be truncated to any shorter prefix and still be used meaningfully.
 
-**Conditional uploads.** By default, points are overwritten during upsertion if a point with this ID already exists in the collection. Pass `ONLY_NEW=1` to switch to `INSERT_ONLY` mode, skipping existing points and saving on latency. [Read more on Conditional Updates here](https://qdrant.tech/documentation/concepts/points/#update-mode).
+We use two truncation levels from one model:
+- **1024 dims → Dense**, fast retrieval with lower memory footprint.
+- **1536 dims → Reranker**, higher precision for rescoring retrieved candidates.
 
-> **Note:** `ONLY_NEW=1` only speeds up the Qdrant upsert step. Embeddings are still computed for every paper, so it does not reduce inference costs.
+> MRL truncation requests for the same text [in Qdrant Cloud Inference are deduplicated into one API call](https://qdrant.tech/documentation/concepts/inference/#reduce-vector-dimensionality-with-matryoshka-models), to save costs and latency.
+
+> **Experiment:** You can change `OPENAI_RETRIEVER_EMBEDDING_DIMENSION` and `OPENAI_RERANKER_EMBEDDING_DIMENSION` in `search_engine.py` to see how dimensionality will affect resource usage and retrieval quality. 1536 is the maximum for `text-embedding-3-small`. You can switch `OPENAI_EMBEDDING_MODEL` to `text-embedding-3-large` for higher dimensions, but it is significantly more expensive.
+
+#### Ingestion
 
 To recreate the collection from scratch before ingestion:
 
@@ -174,9 +169,20 @@ To recreate the collection from scratch before ingestion:
 make ingest-data-to-qdrant RECREATE=1
 ```
 
+**Efficient batch upload.** Papers are streamed via a generator into `upload_points` in batches (default: 32). Lazy batching, auto retries, parallelism, see `batch_size`, `parallel`, and `max_retries` parameters in `search_engine.py` → `upsert_points()`.
+
+**Conditional uploads.** By default, points are overwritten during upsertion if a point with this ID already exists in the collection. Pass `ONLY_NEW=1` to switch to `INSERT_ONLY` mode, skipping existing points and saving on latency, if you want to expand the dataset efficiently or optimize the uploading process in case you had to restart it midway. [Read more on Conditional Upserts/Updates here](https://qdrant.tech/documentation/concepts/points/#update-mode).
+
+> **Note:** `ONLY_NEW=1` only speeds up the Qdrant upsert step. Embeddings are still computed for every paper, so it does not reduce inference costs.
+
+**BM25 Sparse Vectors Inference**
+Qdrant supports [BM25-based sparse vector inference](https://qdrant.tech/documentation/guides/text-search/#bm25) on the server side.
+
+> BM25 usage in Qdrant requires an `avg_len` parameter, the average document length used in the formula. We estimate this by sampling the first 300 abstracts (see `_estimate_avg_abstract_len()` in `search_engine.py`). You can adjust `ESTIMATE_BM25_AVG_LEN_ON_X_DOCS` if needed.
+
 ### Result
 
-Open your Qdrant Cluster Dashboard (`Cluster UI`). You should see `pubmed_papers` populated with all papers in the list of all collections. [Qdrant WebUI](https://qdrant.tech/documentation/web-ui/).
+Open your Qdrant Cluster Dashboard (`Cluster UI`). You should see your collection populated with all papers. [Read more about Qdrant WebUI](https://qdrant.tech/documentation/web-ui/).
 
 ## Part 2: Context Engineering
 
@@ -187,8 +193,8 @@ Query the collection using a context engineering pipeline that routes natural la
 Two phases (see `context.py`):
 
 1. **Tool routing** — the LLM reads the question and calls one of two Qdrant tools:
-   - `retrieve_papers_based_on_query` — hybrid search (dense + BM25) fused by reranking.
-   - `recommend_papers_based_on_constraints` — based on Recommendation API. For queries with negative constraints ("papers about X but not Y").
+   - `retrieve_papers_based_on_query` — hybrid search (dense + lexical) fused by reranking.
+   - `recommend_papers_based_on_constraints` — based on Recommendation API for queries with negative constraints ("papers about X but not Y").
 2. **Summarization** — the LLM summarizes retrieved papers into key findings.
 
 #### Hybrid search with multistage retrieval
