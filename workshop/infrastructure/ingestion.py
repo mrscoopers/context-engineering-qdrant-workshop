@@ -1,3 +1,4 @@
+import gzip
 import json
 import logging
 
@@ -8,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 def _load_json(path: str) -> dict:
+    if path.endswith(".gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            return json.load(f)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 

@@ -17,4 +17,4 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini") #your agent
 
 # --- Data paths ---
-PUBMED_JSON_PATH = os.getenv("PUBMED_JSON_PATH", "data/pubmed_dataset.json")
+PUBMED_JSON_PATH = os.getenv("PUBMED_JSON_PATH", "data/pubmed_dataset.json.gz")

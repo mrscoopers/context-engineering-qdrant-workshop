@@ -33,10 +33,11 @@ Capabilities for meaningful context engineering:
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) package manager
+- ~200 MB of free space: the dataset in `data` folder is stored compressed on disk (~42 MB), but is decompressed in memory (~163 MB) during ingestion
 - A [Qdrant Cloud](https://cloud.qdrant.io/) **Free (Forever) Tier** cluster. The UI will guide you through creating a cluster and obtaining your endpoint URL and API key. No credit card needed. [Video walkthrough](https://www.youtube.com/watch?v=xvWIssi_cjQ).
 - An [OpenAI API key](https://platform.openai.com/api-keys). You'll need it for both embedding inference (`text-embedding-3-small`) and LLM-based tool routing (`gpt-4o-mini`).
 
-> Embedding all 26,788 abstracts from `data/pubmed_dataset.json` with `text-embedding-3-small` costs approximately **$0.15**. Search queries use `gpt-4o-mini` for tool routing and summarization costing fractions of a cent per query. Expect around **~$0.17** for running the entire pipeline.
+> Embedding all 26,788 abstracts from `data/pubmed_dataset.json.gz` with `text-embedding-3-small` costs approximately **$0.15**. Search queries use `gpt-4o-mini` for tool routing and summarization costing fractions of a cent per query. Expect around **~$0.17** for running the entire pipeline.
 
 ---
 
@@ -65,10 +66,10 @@ QDRANT_COLLECTION_NAME=pubmed_papers
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4o-mini
 
-PUBMED_JSON_PATH=data/pubmed_dataset.json
+PUBMED_JSON_PATH=data/pubmed_dataset.json.gz
 ```
 
-3. You're all set. The dataset is already included at `data/pubmed_dataset.json`.
+3. You're all set. The dataset is already included at `data/pubmed_dataset.json.gz`. 
 
 ### About the dataset
 
@@ -85,7 +86,7 @@ The included dataset contains **26,788 PubMed papers**, each with:
 ```
 pubmed-navigator-workshop/
 ├── data/
-│   └── pubmed_dataset.json        # PubMed papers dataset
+│   └── pubmed_dataset.json.gz     # PubMed papers dataset (compressed)
 ├── workshop/
 │   ├── config.py                  # Environment variables
 │   ├── cli.py                     # CLI entry point
