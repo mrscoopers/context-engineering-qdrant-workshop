@@ -145,6 +145,12 @@ In biomedical domain keywords-based matching matters: specific terms like gene n
 make ingest-data-to-qdrant
 ```
 
+To recreate the collection from scratch before ingestion:
+
+```bash
+make ingest-data-to-qdrant RECREATE=1
+```
+
 #### Cloud Inference + Matryoshka Representation Learning
 
 With [Cloud Inference](https://qdrant.tech/documentation/cloud/inference/#use-external-models) (`CLOUD_INFERENCE = True` in `search_engine.py`), embedding happens server-side: the client sends raw text, Qdrant calls OpenAI.  
@@ -162,12 +168,6 @@ We use two truncation levels from one model:
 > **Experiment:** You can change `OPENAI_RETRIEVER_EMBEDDING_DIMENSION` and `OPENAI_RERANKER_EMBEDDING_DIMENSION` in `search_engine.py` to see how dimensionality will affect resource usage and retrieval quality. 1536 is the maximum for `text-embedding-3-small`. You can switch `OPENAI_EMBEDDING_MODEL` to `text-embedding-3-large` for higher dimensions, but it is significantly more expensive.
 
 #### Ingestion
-
-To recreate the collection from scratch before ingestion:
-
-```bash
-make ingest-data-to-qdrant RECREATE=1
-```
 
 **Efficient batch upload.** Papers are streamed via a generator into `upload_points` in batches (default: 32). Lazy batching, auto retries, parallelism, see `batch_size`, `parallel`, and `max_retries` parameters in `search_engine.py` → `upsert_points()`.
 
