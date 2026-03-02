@@ -38,8 +38,6 @@ Capabilities for meaningful context engineering:
 
 > Embedding all 26,788 abstracts from `data/pubmed_dataset.json` with `text-embedding-3-small` costs approximately **$0.15**. Search queries use `gpt-4o-mini` for tool routing and summarization costing fractions of a cent per query. Expect around **~$0.17** for running the entire pipeline.
 
----
-
 ## Setup
 
 1. Install dependencies:
@@ -54,8 +52,8 @@ uv sync
 cp .env.example .env
 ```
 
-- Qdrant Cloud API key & cluster URL — the UI guides you through obtaining them after creating a cluster. [Video walkthrough](https://www.youtube.com/watch?v=xvWIssi_cjQ).
-- OpenAI API key — obtain it [here](https://platform.openai.com/api-keys)
+- For Qdrant Cloud API key & cluster URL, UI guides you through obtaining them after creating a cluster. [Video walkthrough](https://www.youtube.com/watch?v=xvWIssi_cjQ).
+- For OpenAI API key, obtain it [here](https://platform.openai.com/api-keys)
 
 ```env
 QDRANT_URL=https://your-cluster.cloud.qdrant.io
@@ -101,8 +99,6 @@ pubmed-navigator-workshop/
 ├── Makefile                       # Commands
 └── pyproject.toml
 ```
-
----
 
 ## Part 1: Data Ingestion
 
@@ -180,8 +176,6 @@ make ingest-data-to-qdrant RECREATE=1
 ### Result
 
 Open your Qdrant Cluster Dashboard (`Cluster UI`). You should see `pubmed_papers` populated with all papers in the list of all collections. [Qdrant WebUI](https://qdrant.tech/documentation/web-ui/).
-
----
 
 ## Part 2: Context Engineering
 
@@ -268,8 +262,6 @@ make context-engineering-qdrant QUESTION="Papers about TP53 mutations in cancer 
 make context-engineering-qdrant QUESTION="Research on BRCA1 DNA repair mechanisms and PD-L1 immunotherapy response biomarkers, excluding pediatric populations."
 ```
 
----
-
 ## What's next
 
 Things to experiment with:
@@ -277,17 +269,19 @@ Things to experiment with:
 - Toggle `CLOUD_INFERENCE` in `search_engine.py` to compare server-side vs. client-side embedding.
 - Try different `batch_size` and `parallel` values in `search_engine.py` → `upsert_points()` to optimize ingestion speed.
 
+and
 
 - Change embedding dimensions (`OPENAI_RETRIEVER_EMBEDDING_DIMENSION`, `OPENAI_RERANKER_EMBEDDING_DIMENSION` in `search_engine.py`) and observe how retrieval quality and resource usage change.
 - Tune quantization search parameters (`oversampling`, `rescore`) in `search_engine_query.py` → `retrieve_papers_based_on_query()`.
 - Change the `limit` on individual prefetch stages in `search_engine_query.py` to control how many candidates each retrieval method (dense vs. BM25) contributes before fusion and reranking.
 - Adjust `ESTIMATE_BM25_AVG_LEN_ON_X_DOCS` or the default `avg_len` in `search_engine.py` to see how BM25 scoring changes with different average document length estimates.
 
+and
 
 - Adjust `LIMIT` to see how the number of retrieved papers affects summarization.
 - Modify the prompt in `prompts.py` or tool descriptions in `tools.py` and see how the agent's behavior changes.
 
 
-Further resources for context engineering with Agents and Qdrant:
+Check further resources for context engineering with Agents and Qdrant:
 - [Qdrant MCP Server](https://github.com/qdrant/mcp-server-qdrant)
 - [Qdrant Skills](https://github.com/qdrant/skills)
